@@ -1,10 +1,13 @@
 #pragma once
-
+#define ROCBLAS_BETA_FEATURES_API
 #include <cstdint>
 
 #include <cuda_runtime_api.h>
 #include <cusparse.h>
 #include <cublas_v2.h>
+#if (!defined(USE_ROCM) && !defined(_MSC_VER)) || (defined(USE_ROCM) && ROCM_VERSION >= 50700)
+#include <cublasLt.h>
+#endif
 
 #ifdef CUDART_VERSION
 #include <cusolverDn.h>
@@ -71,7 +74,9 @@ TORCH_CUDA_CPP_API Allocator* getCUDADeviceAllocator();
 /* Handles */
 TORCH_CUDA_CPP_API cusparseHandle_t getCurrentCUDASparseHandle();
 TORCH_CUDA_CPP_API cublasHandle_t getCurrentCUDABlasHandle();
-
+#if (!defined(USE_ROCM) && !defined(_MSC_VER)) || (defined(USE_ROCM) && ROCM_VERSION >= 50700)
+TORCH_CUDA_CPP_API cublasLtHandle_t getCurrentCUDABlasLtHandle();
+#endif
 TORCH_CUDA_CPP_API void clearCublasWorkspaces();
 
 #ifdef CUDART_VERSION

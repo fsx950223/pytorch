@@ -271,6 +271,7 @@ if(HIP_FOUND)
     set(rocrand_DIR ${ROCM_PATH}/lib/cmake/rocrand)
     set(hiprand_DIR ${ROCM_PATH}/lib/cmake/hiprand)
     set(rocblas_DIR ${ROCM_PATH}/lib/cmake/rocblas)
+    set(hipblaslt_DIR ${ROCM_PATH}/lib/cmake/hipblaslt)
     set(miopen_DIR ${ROCM_PATH}/lib/cmake/miopen)
     set(rocfft_DIR ${ROCM_PATH}/lib/cmake/rocfft)
     set(hipfft_DIR ${ROCM_PATH}/lib/cmake/hipfft)
@@ -287,6 +288,7 @@ if(HIP_FOUND)
     set(rocrand_DIR ${ROCRAND_PATH}/lib/cmake/rocrand)
     set(hiprand_DIR ${HIPRAND_PATH}/lib/cmake/hiprand)
     set(rocblas_DIR ${ROCBLAS_PATH}/lib/cmake/rocblas)
+    set(hipblaslt_DIR ${ROCM_PATH}/lib/cmake/hipblaslt)
     set(miopen_DIR ${MIOPEN_PATH}/lib/cmake/miopen)
     set(rocfft_DIR ${ROCFFT_PATH}/lib/cmake/rocfft)
     set(hipfft_DIR ${HIPFFT_PATH}/lib/cmake/hipfft)
@@ -305,6 +307,9 @@ if(HIP_FOUND)
   find_package_and_print_version(hiprand REQUIRED)
   find_package_and_print_version(rocblas REQUIRED)
   find_package_and_print_version(miopen REQUIRED)
+  if(ROCM_VERSION_DEV VERSION_GREATER_EQUAL "5.7.0")
+    find_package_and_print_version(hipblaslt REQUIRED)
+  endif()
   if(ROCM_VERSION_DEV VERSION_GREATER_EQUAL "4.1.0")
     find_package_and_print_version(hipfft REQUIRED)
   else()
@@ -346,4 +351,110 @@ if(HIP_FOUND)
   find_library(ROCM_HIPRTC_LIB ${hip_library_name} HINTS ${HIP_PATH}/lib)
   # roctx is part of roctracer
   find_library(ROCM_ROCTX_LIB roctx64 HINTS ${ROCTRACER_PATH}/lib)
+  if(ROCM_VERSION_DEV VERSION_GREATER_EQUAL "5.7.0")
+    # check whether hipblaslt is using its own datatype
+    set(file "${PROJECT_BINARY_DIR}/hipblaslt_test_data_type.cc")
+    file(WRITE ${file} ""
+      "#include <hipblaslt/hipblaslt.h>\n"
+      "int main() {\n"
+      "    hipblasltDatatype_t bar = HIPBLASLT_R_16F;\n"
+      "    return 0;\n"
+      "}\n"
+      )
+
+    try_compile(hipblaslt_compile_result_custom_datatype ${PROJECT_RANDOM_BINARY_DIR} ${file}
+      CMAKE_FLAGS "-DINCLUDE_DIRECTORIES=${ROCM_INCLUDE_DIRS}"
+      COMPILE_DEFINITIONS -D__HIP_PLATFORM_AMD__ -D__HIP_PLATFORM_HCC__
+      OUTPUT_VARIABLE hipblaslt_compile_output)
+
+    if(hipblaslt_compile_result_custom_datatype)
+      set(HIPBLASLT_CUSTOM_DATA_TYPE ON)
+      #message("hipblaslt is using custom data type: ${hipblaslt_compile_output}")
+      message("hipblaslt is using custom data type")
+    else()
+      set(HIPBLASLT_CUSTOM_DATA_TYPE OFF)
+      #message("hipblaslt is NOT using custom data type: ${hipblaslt_compile_output}")
+      message("hipblaslt is NOT using custom data type")
+    endif()
+
+    # check whether hipblaslt is using its own compute type
+    set(file "${PROJECT_BINARY_DIR}/hipblaslt_test_compute_type.cc")
+    file(WRITE ${file} ""
+      "#include <hipblaslt/hipblaslt.h>\n"
+      "int main() {\n"
+      "    hipblasLtComputeType_t baz = HIPBLASLT_COMPUTE_F32;\n"
+      "    return 0;\n"
+      "}\n"
+      )
+
+    try_compile(hipblaslt_compile_result_custom_compute_type ${PROJECT_RANDOM_BINARY_DIR} ${file}
+      CMAKE_FLAGS "-DINCLUDE_DIRECTORIES=${ROCM_INCLUDE_DIRS}"
+      COMPILE_DEFINITIONS -D__HIP_PLATFORM_AMD__ -D__HIP_PLATFORM_HCC__
+      OUTPUT_VARIABLE hipblaslt_compile_output)
+
+    if(hipblaslt_compile_result_custom_compute_type)
+      set(HIPBLASLT_CUSTOM_COMPUTE_TYPE ON)
+      #message("hipblaslt is using custom compute type: ${hipblaslt_compile_output}")
+      message("hipblaslt is using custom compute type")
+    else()
+      set(HIPBLASLT_CUSTOM_COMPUTE_TYPE OFF)
+      #message("hipblaslt is NOT using custom compute type: ${hipblaslt_compile_output}")
+      message("hipblaslt is NOT using custom compute type")
+    endif()
+
+    # check whether hipblaslt provides getIndexFromAlgo
+    set(file "${PROJECT_BINARY_DIR}/hipblaslt_test_getIndexFromAlgo.cc")
+    file(WRITE ${file} ""
+      "#include <hipblaslt/hipblaslt.h>\n"
+      "#include <hipblaslt/hipblaslt-ext.hpp>\n"
+      "int main() {\n"
+      "    hipblasLtMatmulAlgo_t algo;\n"
+      "    return hipblaslt_ext::getIndexFromAlgo(algo);\n"
+      "    return 0;\n"
+      "}\n"
+      )
+
+    try_compile(hipblaslt_compile_result_getindexfromalgo ${PROJECT_RANDOM_BINARY_DIR} ${file}
+      CMAKE_FLAGS
+        "-DINCLUDE_DIRECTORIES=${ROCM_INCLUDE_DIRS}"
+        "-DLINK_DIRECTORIES=${ROCM_PATH}/lib"
+      LINK_LIBRARIES ${hipblaslt_LIBRARIES}
+      COMPILE_DEFINITIONS -D__HIP_PLATFORM_AMD__ -D__HIP_PLATFORM_HCC__
+      OUTPUT_VARIABLE hipblaslt_compile_output)
+
+    if(hipblaslt_compile_result_getindexfromalgo)
+      set(HIPBLASLT_HAS_GETINDEXFROMALGO ON)
+      #message("hipblaslt provides getIndexFromAlgo: ${hipblaslt_compile_output}")
+      message("hipblaslt provides getIndexFromAlgo")
+    else()
+      set(HAS_GETINDEXFROMALGO OFF)
+      #message("hipblaslt does not provide getIndexFromAlgo: ${hipblaslt_compile_output}")
+      message("hipblaslt does not provide getIndexFromAlgo")
+    endif()
+  endif()
+
+  # check whether HIP declares new types
+  set(file "${PROJECT_BINARY_DIR}/hip_new_types.cc")
+  file(WRITE ${file} ""
+    "#include <hip/library_types.h>\n"
+    "int main() {\n"
+    "    hipDataType baz = HIP_R_8F_E4M3_FNUZ;\n"
+    "    return 0;\n"
+    "}\n"
+    )
+
+  try_compile(hipblaslt_compile_result ${PROJECT_RANDOM_BINARY_DIR} ${file}
+    CMAKE_FLAGS "-DINCLUDE_DIRECTORIES=${ROCM_INCLUDE_DIRS}"
+    COMPILE_DEFINITIONS -D__HIP_PLATFORM_AMD__ -D__HIP_PLATFORM_HCC__
+    OUTPUT_VARIABLE hipblaslt_compile_output)
+
+  if(hipblaslt_compile_result)
+    set(HIP_NEW_TYPE_ENUMS ON)
+    #message("HIP is using new type enums: ${hipblaslt_compile_output}")
+    message("HIP is using new type enums")
+  else()
+    set(HIP_NEW_TYPE_ENUMS OFF)
+    #message("HIP is NOT using new type enums: ${hipblaslt_compile_output}")
+    message("HIP is NOT using new type enums")
+  endif()
 endif()
