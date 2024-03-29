@@ -959,16 +959,7 @@ void gemm_and_bias(
       CUBLASLT_MATMUL_PREF_MAX_WORKSPACE_BYTES,
       &workspaceSize,
       sizeof(workspaceSize)));
-  #ifndef USE_ROCM
-    uint32_t a_alignment = _getAlignment(reinterpret_cast<uintptr_t>(mat1_ptr));
-    uint32_t b_alignment = _getAlignment(reinterpret_cast<uintptr_t>(mat2_ptr));
-    uint32_t c_alignment = _getAlignment(reinterpret_cast<uintptr_t>(result_ptr));
-    uint32_t d_alignment = _getAlignment(reinterpret_cast<uintptr_t>(bias));
-    cublasLtMatmulPreferenceSetAttribute(preference.descriptor(), CUBLASLT_MATMUL_PREF_MIN_ALIGNMENT_A_BYTES, &a_alignment, sizeof(a_alignment));
-    cublasLtMatmulPreferenceSetAttribute(preference.descriptor(), CUBLASLT_MATMUL_PREF_MIN_ALIGNMENT_B_BYTES, &b_alignment, sizeof(a_alignment));
-    cublasLtMatmulPreferenceSetAttribute(preference.descriptor(), CUBLASLT_MATMUL_PREF_MIN_ALIGNMENT_C_BYTES, &c_alignment, sizeof(a_alignment));
-    cublasLtMatmulPreferenceSetAttribute(preference.descriptor(), CUBLASLT_MATMUL_PREF_MIN_ALIGNMENT_D_BYTES, &d_alignment, sizeof(a_alignment));
-  #endif
+
   auto& allocator = *::c10::cuda::CUDACachingAllocator::get();
   auto workspace = allocator.allocate(workspaceSize);
 
